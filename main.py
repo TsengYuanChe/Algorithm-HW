@@ -1,5 +1,6 @@
-import os, random
+import os, random, time
 import pandas as pd
+from collections import defaultdict
 
 # FIFO
 def fifo(page_references, num_frames):
@@ -12,13 +13,13 @@ def fifo(page_references, num_frames):
     for page in page_references:
         if page not in frames:
             page_faults += 1
-            interrupts += 1
             if len(frames) < num_frames:
                 frames.append(page)
             else:
                 page_to_remove = frames.pop(0)
                 if dirty_bits.get(page_to_remove, False):
                     disk_writes += 1
+                    interrupts += 1
                 frames.append(page)
         dirty_bits[page] = random.choice([True, False])
 
@@ -31,24 +32,31 @@ def optimal(page_references, num_frames):
     interrupts = 0
     disk_writes = 0
     dirty_bits = {}
+    
+    # 預處理：構建每個頁面的未來使用位置列表
+    future_uses = defaultdict(list)
+    for i, page in enumerate(page_references):
+        future_uses[page].append(i)
 
-    for i in range(len(page_references)):
-        page = page_references[i]
+    for i, page in enumerate(page_references):
+        # 移除當前位置
+        if future_uses[page]:
+            future_uses[page].pop(0)
+        
         if page not in frames:
             # 頁面錯誤發生
             page_faults += 1
-            interrupts += 1
             if len(frames) < num_frames:
                 frames.append(page)
             else:
                 # Optimal 替換邏輯
-                # 尋找未來最長時間不會被訪問的頁面
+                # 尋找未來最遠使用的頁面
                 furthest_use = -1
                 page_to_remove = None
                 for frame_page in frames:
-                    try:
-                        next_use = page_references[i+1:].index(frame_page)
-                    except ValueError:
+                    if future_uses[frame_page]:
+                        next_use = future_uses[frame_page][0]
+                    else:
                         next_use = float('inf')  # 該頁面不再被使用
                     if next_use > furthest_use:
                         furthest_use = next_use
@@ -57,6 +65,7 @@ def optimal(page_references, num_frames):
                 frames.remove(page_to_remove)
                 if dirty_bits.get(page_to_remove, False):
                     disk_writes += 1
+                    interrupts += 1
 
                 frames.append(page)
 
@@ -78,7 +87,6 @@ def enhanced_second_chance(page_references, num_frames):
     for page in page_references:
         if page not in frames:
             page_faults += 1
-            interrupts += 1
             if len(frames) < num_frames:
                 frames.append(page)
                 reference_bits[page] = 1  # 新載入頁面引用位設為 1
@@ -90,6 +98,7 @@ def enhanced_second_chance(page_references, num_frames):
                         # 引用位為 0，可替換
                         if dirty_bits.get(page_to_check, False):
                             disk_writes += 1
+                            interrupts += 1
                         frames[pointer] = page
                         reference_bits[page] = 1  # 新頁面引用位設為 1
                         break
@@ -97,6 +106,50 @@ def enhanced_second_chance(page_references, num_frames):
                         # 引用位為 1，重設引用位，並移動指針
                         reference_bits[page_to_check] = 0
                         pointer = (pointer + 1) % num_frames
+
+        # 隨機設置髒位
+        dirty_bits[page] = random.choice([True, False])
+
+    return page_faults, interrupts, disk_writes
+
+# My Algorithm
+def myal(page_references, num_frames, weight_lru=2, weight_dirty=3):
+    frames = []  # 用來存儲當前內存框架中的頁面
+    page_faults = 0  # 頁面錯誤次數
+    interrupts = 0  # 中斷次數
+    disk_writes = 0  # 磁碟寫入次數
+    dirty_bits = {}  # 用來追蹤每個頁面的髒位
+    last_used = {}  # 用來追蹤每個頁面的最近使用時間
+
+    for current_time, page in enumerate(page_references):
+        # 如果頁面不在內存框架中
+        if page not in frames:
+            page_faults += 1
+            
+            
+            if len(frames) < num_frames:
+                frames.append(page)
+            else:
+                # 基於加權成本替換的邏輯進行頁面選擇
+                def weighted_cost(p):
+                    # 計算替換成本：髒位和最近使用時間的權重結合
+                    lru_cost = weight_lru * (current_time - last_used.get(p, 0))
+                    dirty_cost = weight_dirty if dirty_bits.get(p, False) else 0
+                    return lru_cost + dirty_cost
+
+                # 找到成本最高的頁面並替換
+                page_to_replace = max(frames, key=weighted_cost)
+                frames.remove(page_to_replace)
+                
+                # 如果被替換的頁面是髒頁，則增加磁碟寫入次數
+                if dirty_bits.get(page_to_replace, False):
+                    disk_writes += 1
+                    interrupts += 1
+                
+                frames.append(page)
+        
+        # 更新該頁面的最近使用時間
+        last_used[page] = current_time
 
         # 隨機設置髒位
         dirty_bits[page] = random.choice([True, False])
@@ -151,7 +204,8 @@ def generate_cyclic_references(total_references, page_range, cycle_length=50):
 algorithms = {
     'fifo': fifo,
     'opt': optimal,
-    'exc': enhanced_second_chance
+    'exc': enhanced_second_chance,
+    'myal': myal,
 }
 
 strings = {
@@ -165,7 +219,7 @@ frame_sizes = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 num_references = 120000  
 page_range = 1200 
 
-for x in range(0,3):
+for x in range(3,4):
     # Directory
     output_dir = f"{list(algorithms.keys())[x]}data"
     os.makedirs(output_dir, exist_ok=True)

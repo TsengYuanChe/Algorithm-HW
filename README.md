@@ -12,5 +12,8 @@ Overall I obtain nine dataframes, they are saved in the files 'fifodata', 'optda
 In this program, I plot the datas. In a given plot, x-axis are frame_sizes, y-axis are 'page_faults_results',  'interrupts_results', or 'disk_writes_results', the databases are the same and the three lines are correspond to different algorithms.
 Overall nines plot, all of them are saved in resultplt, they are named by the combination of database and results.
 
+
+
+
 # test.py
 Ignore it.

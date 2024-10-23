@@ -219,7 +219,7 @@ frame_sizes = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 num_references = 120000  
 page_range = 1200 
 
-for x in range(3,4):
+for x in range(0,4):
     # Directory
     output_dir = f"{list(algorithms.keys())[x]}data"
     os.makedirs(output_dir, exist_ok=True)

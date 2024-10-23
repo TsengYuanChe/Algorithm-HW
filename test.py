@@ -1,3 +1,3 @@
-for x in range(0,3):
-    for y in range(0,3):
-        print(x,y)
+results = ['page_faults', 'interrupts', 'disk_writes']
+for x in results:
+    print(x, type(x))
